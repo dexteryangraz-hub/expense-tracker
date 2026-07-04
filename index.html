@@ -15,21 +15,30 @@
     --accent: #2563eb; --accent-light: #dbeafe; --danger: #dc2626; --ok: #16a34a;
     --border: #e5e7eb; --warn: #d97706;
   }
+  html[data-theme="forest"] { --accent: #15803d; --accent-light: #dcfce7; --bg: #f3f6f1; }
+  html[data-theme="sunset"] { --accent: #ea580c; --accent-light: #ffedd5; --bg: #faf6ef; }
+  html[data-theme="violet"] { --accent: #7c3aed; --accent-light: #ede9fe; --bg: #f6f5fa; }
+  html[data-dark="1"] { --bg: #12151a; --card: #1b2027; --text: #e7eaf0; --muted: #98a2b0; --border: #2b323c;
+    --accent: #3b82f6; --accent-light: #203a63; --ok: #4ade80; --danger: #f87171; }
+  html[data-dark="1"][data-theme="forest"] { --accent: #22c55e; --accent-light: #173627; }
+  html[data-dark="1"][data-theme="sunset"] { --accent: #fb923c; --accent-light: #40260f; }
+  html[data-dark="1"][data-theme="violet"] { --accent: #a78bfa; --accent-light: #2e2350; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
   header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
   header h1 { font-size: 1.15rem; }
   .lang-btn { border: 1px solid var(--accent); background: var(--accent-light); color: var(--accent); border-radius: 20px; padding: 6px 16px; cursor: pointer; font-weight: 600; font-size: .9rem; }
   nav { display: flex; gap: 4px; background: var(--card); padding: 8px 20px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-  nav button { border: none; background: transparent; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: .95rem; color: var(--muted); white-space: nowrap; }
+  nav button { border: none; background: transparent; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: .95rem; color: var(--muted); white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; }
   nav button.active { background: var(--accent); color: #fff; }
+  .nav-ico svg { width: 17px; height: 17px; display: block; }
   main { max-width: 960px; margin: 0 auto; padding: 20px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 18px; }
   .card h2 { font-size: 1rem; margin-bottom: 12px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
   label { display: block; font-size: .82rem; color: var(--muted); margin: 10px 0 4px; }
-  input, select { width: 100%; min-width: 0; max-width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: #fff; }
+  input, select { width: 100%; min-width: 0; max-width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: var(--card); color: var(--text); }
   /* iOS Safari: date inputs have an intrinsic width that overflows containers */
   input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-height: 40px; }
   .filters > div { min-width: 0; }
@@ -38,7 +47,7 @@
   .item-ctrl { display: flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; }
   .pct-badge { min-width: 58px; text-align: center; background: var(--accent-light); color: var(--accent); border-radius: 12px; font-size: .75rem; font-weight: 600; padding: 2px 8px; font-variant-numeric: tabular-nums; }
   .btn { margin-top: 14px; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: .95rem; cursor: pointer; font-weight: 600; }
-  .btn.secondary { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  .btn.secondary { background: var(--card); color: var(--accent); border: 1px solid var(--accent); }
   .btn.danger { background: var(--danger); }
   table { width: 100%; border-collapse: collapse; font-size: .9rem; }
   th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
@@ -56,19 +65,21 @@
   .flex { display: flex; justify-content: space-between; align-items: center; }
   .muted { color: var(--muted); font-size: .85rem; }
   .del { color: var(--danger); cursor: pointer; background: none; border: none; font-size: 1rem; }
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 10px 20px; border-radius: 8px; font-size: .9rem; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 99; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--card); padding: 10px 20px; border-radius: 8px; font-size: .9rem; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 99; }
   .toast.show { opacity: 1; }
   .drop { border: 2px dashed var(--border); border-radius: 12px; padding: 28px; text-align: center; color: var(--muted); cursor: pointer; }
   .drop.over { border-color: var(--accent); background: var(--accent-light); }
   .chart-wrap { position: relative; height: 260px; }
   .month-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-  .month-nav button { border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 1rem; }
+  .month-nav button { border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 1rem; color: var(--text); }
   .month-nav span { font-weight: 700; font-size: 1.05rem; min-width: 110px; text-align: center; }
   .item-row { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
   .item-row input:nth-child(1) { flex: 2; }
   .item-row input:nth-child(2) { width: 74px; flex: none; }
   .item-row input:nth-child(3) { width: 110px; flex: none; }
-  .nav-ico { display: none; }
+  .theme-swatch { width: 34px; height: 34px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; padding: 0; }
+  .theme-swatch.active { border-color: var(--text); }
+  .swatch-item { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: .72rem; color: var(--muted); }
   /* --- mobile (iPhone) layout: bottom tab bar, safe areas, no input zoom --- */
   @media (max-width: 700px) {
     header { padding-top: calc(12px + env(safe-area-inset-top)); }
@@ -77,8 +88,8 @@
       padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
       justify-content: space-around; box-shadow: 0 -2px 10px rgba(0,0,0,.05); }
     nav button { flex: 1; display: flex; flex-direction: column; align-items: center;
-      gap: 2px; padding: 6px 2px; font-size: .68rem; }
-    .nav-ico { display: block; font-size: 1.3rem; line-height: 1; }
+      gap: 3px; padding: 6px 2px; font-size: .68rem; }
+    .nav-ico svg { width: 22px; height: 22px; }
     main { padding: 14px 14px calc(96px + env(safe-area-inset-bottom)); }
     input, select { font-size: 16px; min-height: 42px; } /* 16px stops Safari zoom-on-focus */
     .btn { min-height: 44px; }
@@ -102,11 +113,11 @@
   <button class="lang-btn" id="langBtn" onclick="toggleLang()"></button>
 </header>
 <nav>
-  <button data-view="dashboard" class="active" onclick="showView('dashboard')"><span class="nav-ico">📊</span><span data-i18n="navDashboard"></span></button>
-  <button data-view="add" onclick="showView('add')"><span class="nav-ico">➕</span><span data-i18n="navAdd"></span></button>
-  <button data-view="records" onclick="showView('records')"><span class="nav-ico">📋</span><span data-i18n="navRecords"></span></button>
-  <button data-view="import" onclick="showView('import')"><span class="nav-ico">📥</span><span data-i18n="navImport"></span></button>
-  <button data-view="settings" onclick="showView('settings')"><span class="nav-ico">⚙️</span><span data-i18n="navSettings"></span></button>
+  <button data-view="dashboard" class="active" onclick="showView('dashboard')"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span><span data-i18n="navDashboard"></span></button>
+  <button data-view="add" onclick="showView('add')"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></span><span data-i18n="navAdd"></span></button>
+  <button data-view="records" onclick="showView('records')"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span><span data-i18n="navRecords"></span></button>
+  <button data-view="import" onclick="showView('import')"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 3v12"/></svg></span><span data-i18n="navImport"></span></button>
+  <button data-view="settings" onclick="showView('settings')"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></span><span data-i18n="navSettings"></span></button>
 </nav>
 <main>
 
@@ -211,6 +222,17 @@
 <!-- SETTINGS -->
 <section id="view-settings" style="display:none">
   <div class="card">
+    <h2 data-i18n="themeTitle"></h2>
+    <label data-i18n="themeColor"></label>
+    <div id="themeSwatches" style="display:flex;gap:16px;margin:8px 0 4px"></div>
+    <label data-i18n="darkMode"></label>
+    <select id="darkSel" onchange="setDark(this.value)">
+      <option value="light"></option>
+      <option value="dark"></option>
+      <option value="auto"></option>
+    </select>
+  </div>
+  <div class="card">
     <h2 data-i18n="budgetSettings"></h2>
     <p class="muted" data-i18n="budgetHelp"></p>
     <div id="budgetInputs"></div>
@@ -274,6 +296,9 @@ const I18N = {
     fxCurrent: r => `目前匯率：1 USD ≈ NT$${r}（自動更新）`,
     fxApprox: (u, n, r) => `US$${u} ≈ NT$${n.toLocaleString()}（匯率 ${r}）`,
     fxError: "無法取得匯率，請檢查網路後再試", fxStale: "（離線，使用上次匯率）",
+    themeTitle: "主題外觀", themeColor: "主題色", darkMode: "深色模式",
+    dmLight: "淺色", dmDark: "深色", dmAuto: "自動（跟隨系統）",
+    themeNames: { indigo: "靛藍", forest: "森林綠", sunset: "暖陽橘", violet: "紫羅蘭" },
     months: ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
     langLabel: "EN",
     cats: { food: "飲食", drink: "飲品", transport: "交通", shopping: "購物", clothing: "服飾", entertainment: "娛樂", travel: "旅遊", education: "教育/書籍", beauty: "美容/理髮", health: "醫療", bills: "帳單", discount: "紅利折扣", other: "其他" }
@@ -309,6 +334,9 @@ const I18N = {
     fxCurrent: r => `Current rate: 1 USD ≈ NT$${r} (auto-updated)`,
     fxApprox: (u, n, r) => `US$${u} ≈ NT$${n.toLocaleString()} (rate ${r})`,
     fxError: "Couldn't fetch exchange rate — check your connection", fxStale: " (offline, using last saved rate)",
+    themeTitle: "Appearance", themeColor: "Theme color", darkMode: "Dark mode",
+    dmLight: "Light", dmDark: "Dark", dmAuto: "Auto (follow system)",
+    themeNames: { indigo: "Indigo", forest: "Forest", sunset: "Sunset", violet: "Violet" },
     months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
     langLabel: "中文",
     cats: { food: "Food", drink: "Drinks", transport: "Transport", shopping: "Shopping", clothing: "Clothing", entertainment: "Entertainment", travel: "Travel", education: "Education", beauty: "Personal care", health: "Health", bills: "Bills", discount: "Rewards/Discount", other: "Other" }
@@ -357,6 +385,40 @@ function guessItemCategory(name, amt) {
   return undefined; // inherit invoice category
 }
 
+// ---------- theme ----------
+const THEMES = { indigo: "#2563eb", forest: "#15803d", sunset: "#ea580c", violet: "#7c3aed" };
+let theme = localStorage.getItem("et_theme") || "indigo";
+let darkPref = localStorage.getItem("et_dark") || "auto";
+function applyTheme() {
+  document.documentElement.dataset.theme = theme;
+  const sysDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const dark = darkPref === "dark" || (darkPref === "auto" && sysDark);
+  document.documentElement.dataset.dark = dark ? "1" : "0";
+  if (typeof Chart !== "undefined") {
+    const cs = getComputedStyle(document.documentElement);
+    Chart.defaults.color = cs.getPropertyValue("--muted").trim();
+    Chart.defaults.borderColor = cs.getPropertyValue("--border").trim();
+  }
+  renderThemeUI();
+}
+function setTheme(n) { theme = n; localStorage.setItem("et_theme", n); applyTheme(); renderDashboard(); }
+function setDark(v) { darkPref = v; localStorage.setItem("et_dark", v); applyTheme(); renderDashboard(); }
+function renderThemeUI() {
+  document.getElementById("themeSwatches").innerHTML = Object.entries(THEMES).map(([k, c]) => `
+    <span class="swatch-item">
+      <button class="theme-swatch ${k === theme ? "active" : ""}" style="background:${c}" onclick="setTheme('${k}')" aria-label="${k}"></button>
+      <span>${t("themeNames")[k]}</span>
+    </span>`).join("");
+  const sel = document.getElementById("darkSel");
+  sel.options[0].text = t("dmLight");
+  sel.options[1].text = t("dmDark");
+  sel.options[2].text = t("dmAuto");
+  sel.value = darkPref;
+}
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (darkPref === "auto") { applyTheme(); renderDashboard(); }
+});
+
 // ---------- i18n rendering ----------
 function applyLang() {
   document.documentElement.lang = lang === "zh" ? "zh-Hant" : "en";
@@ -364,6 +426,7 @@ function applyLang() {
   document.querySelectorAll("[data-i18n-ph]").forEach(el => el.placeholder = t(el.dataset.i18nPh));
   document.getElementById("langBtn").textContent = t("langLabel");
   fillCategorySelects();
+  renderThemeUI();
   renderAll();
 }
 function toggleLang() {
@@ -622,16 +685,20 @@ function renderRecords() {
       <td onclick="event.stopPropagation()"><button class="del" onclick="delExpense('${x.id}')">✕</button></td>
     </tr>`;
     if (!hasItems) return main;
-    const itemRows = x.items.map((it, i) => `
+    const itemRows = x.items.map((it, i) => {
+      // original USD if stored; otherwise derive it from the record's saved exchange rate
+      const usd = it.fxa != null ? it.fxa : (x.fx && x.fx.r ? +(it.a / x.fx.r).toFixed(2) : null);
+      return `
       <div class="item-line">
         <span class="item-name">${escapeHtml(it.n)}${it.q > 1 ? ` <span class="muted">×${it.q}</span>` : ""}</span>
         <span class="item-ctrl">
           <select onchange="setItemCat('${x.id}',${i},this.value)" style="width:auto;padding:2px 4px;font-size:.78rem">
             ${CAT_KEYS.map(k => `<option value="${k}" ${k === (it.c || x.cat) ? "selected" : ""}>${t("cats")[k]}</option>`).join("")}
           </select>
-          <span class="muted" style="text-align:right">NT$${it.a.toLocaleString()}${it.fxa != null ? `<div style="font-size:.72rem">US$${it.fxa.toLocaleString()}</div>` : ""}</span>
+          <span class="muted" style="text-align:right">NT$${it.a.toLocaleString()}${usd != null ? `<div style="font-size:.72rem">US$${usd.toLocaleString()}</div>` : ""}</span>
         </span>
-      </div>`).join("");
+      </div>`;
+    }).join("");
     return main + `
     <tr id="items-${x.id}" style="display:none">
       <td></td>
@@ -750,7 +817,7 @@ function renderDashboard() {
   if (barChart) barChart.destroy();
   barChart = new Chart(document.getElementById("barChart"), {
     type: "bar",
-    data: { labels: daily.map((_, i) => i + 1), datasets: [{ data: daily, backgroundColor: "#2563eb" }] },
+    data: { labels: daily.map((_, i) => i + 1), datasets: [{ data: daily, backgroundColor: getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() }] },
     options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
       scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 16 } }, y: { beginAtZero: true } } }
   });
@@ -918,6 +985,7 @@ function renderAll() { renderDashboard(); renderRecords(); }
 document.getElementById("fDate").value = new Date().toISOString().slice(0, 10);
 document.getElementById("ghRepo").value = localStorage.getItem("et_gh_repo") || "";
 document.getElementById("ghToken").value = localStorage.getItem("et_gh_token") || "";
+applyTheme();
 applyLang();
 setSyncStatus();
 loadFx();
