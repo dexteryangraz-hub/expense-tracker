@@ -29,7 +29,13 @@
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
   label { display: block; font-size: .82rem; color: var(--muted); margin: 10px 0 4px; }
-  input, select { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: #fff; }
+  input, select { width: 100%; min-width: 0; max-width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: #fff; }
+  /* iOS Safari: date inputs have an intrinsic width that overflows containers */
+  input[type="date"] { -webkit-appearance: none; appearance: none; display: block; min-height: 40px; }
+  .filters > div { min-width: 0; }
+  .item-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 0; }
+  .item-name { overflow-wrap: anywhere; }
+  .item-ctrl { display: flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; }
   .btn { margin-top: 14px; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: .95rem; cursor: pointer; font-weight: 600; }
   .btn.secondary { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
   .btn.danger { background: var(--danger); }
@@ -79,6 +85,13 @@
     th, td { padding: 10px 6px; }
     .month-nav button { padding: 10px 18px; }
     .chart-wrap { height: 230px; }
+    /* item detail rows: name on its own line, category + amount below right */
+    .item-line { flex-wrap: wrap; row-gap: 2px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
+    .item-line:last-child { border-bottom: none; }
+    .item-name { flex: 1 1 100%; }
+    .item-ctrl { margin-left: auto; }
+    .item-ctrl select { min-height: 34px; font-size: 14px; }
+    td select { font-size: 14px !important; min-height: 34px; }
   }
 </style>
 </head>
@@ -548,10 +561,10 @@ function renderRecords() {
     </tr>`;
     if (!hasItems) return main;
     const itemRows = x.items.map((it, i) => `
-      <div class="flex" style="padding:2px 0">
-        <span>${escapeHtml(it.n)}${it.q > 1 ? ` <span class="muted">×${it.q}</span>` : ""}</span>
-        <span>
-          <select onchange="setItemCat('${x.id}',${i},this.value)" style="width:auto;padding:2px 4px;font-size:.78rem;margin-right:8px">
+      <div class="item-line">
+        <span class="item-name">${escapeHtml(it.n)}${it.q > 1 ? ` <span class="muted">×${it.q}</span>` : ""}</span>
+        <span class="item-ctrl">
+          <select onchange="setItemCat('${x.id}',${i},this.value)" style="width:auto;padding:2px 4px;font-size:.78rem">
             ${CAT_KEYS.map(k => `<option value="${k}" ${k === (it.c || x.cat) ? "selected" : ""}>${t("cats")[k]}</option>`).join("")}
           </select>
           <span class="muted">NT$${it.a.toLocaleString()}</span>
@@ -633,29 +646,30 @@ function renderDashboard() {
   // pie — split each expense across item-level categories where present
   const byCat = {};
   monthExp.forEach(x => { for (const [c, a] of catAmounts(x)) byCat[c] = (byCat[c] || 0) + a; });
-  // pie shows every category; negative totals (紅利折扣) are drawn using their absolute value
-  // as slice size, while tooltips show the true signed amount
+  // pie shows only categories with activity this month; negative totals (紅利折扣) are drawn
+  // using their absolute value as slice size, while tooltips show the true signed amount
+  const activeKeys = CAT_KEYS.filter(k => (byCat[k] || 0) !== 0);
   if (pieChart) pieChart.destroy();
   pieChart = new Chart(document.getElementById("pieChart"), {
     type: "doughnut",
-    data: { labels: CAT_KEYS.map(k => (byCat[k] || 0) < 0 ? t("cats")[k] + " (−)" : t("cats")[k]),
-      datasets: [{ data: CAT_KEYS.map(k => Math.abs(byCat[k] || 0)), backgroundColor: CAT_KEYS.map(k => CAT_COLORS[k]), borderWidth: 1 }] },
+    data: { labels: activeKeys.map(k => byCat[k] < 0 ? t("cats")[k] + " (−)" : t("cats")[k]),
+      datasets: [{ data: activeKeys.map(k => Math.abs(byCat[k])), backgroundColor: activeKeys.map(k => CAT_COLORS[k]), borderWidth: 1 }] },
     options: { maintainAspectRatio: false,
       plugins: {
         legend: { position: "right", labels: { boxWidth: 12, font: { size: 10 } } },
         tooltip: { callbacks: { label: ctx => {
-          const k = CAT_KEYS[ctx.dataIndex], v = byCat[k] || 0;
-          return `${t("cats")[k]}: NT$${v.toLocaleString()}`;
+          const k = activeKeys[ctx.dataIndex];
+          return `${t("cats")[k]}: NT$${byCat[k].toLocaleString()}`;
         } } }
       },
-      onClick: (evt, els) => { if (els.length) drillToCategory(CAT_KEYS[els[0].index]); },
+      onClick: (evt, els) => { if (els.length) drillToCategory(activeKeys[els[0].index]); },
       onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? "pointer" : "default"; } }
   });
 
-  // full breakdown list: all categories with amount and share
-  const posTotal = CAT_KEYS.reduce((s, k) => s + Math.max(byCat[k] || 0, 0), 0);
-  document.getElementById("catBreakdown").innerHTML = CAT_KEYS.map(k => {
-    const v = byCat[k] || 0;
+  // breakdown list: only categories with activity, amount and share
+  const posTotal = activeKeys.reduce((s, k) => s + Math.max(byCat[k], 0), 0);
+  document.getElementById("catBreakdown").innerHTML = activeKeys.map(k => {
+    const v = byCat[k];
     const pct = v > 0 && posTotal > 0 ? ` · ${(v / posTotal * 100).toFixed(1)}%` : "";
     return `<div class="flex" style="padding:3px 0;font-size:.85rem;cursor:pointer" onclick="drillToCategory('${k}')">
       <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${CAT_COLORS[k]};margin-right:7px"></span>${t("cats")[k]}</span>
