@@ -46,6 +46,9 @@
   .item-name { overflow-wrap: anywhere; }
   .item-ctrl { display: flex; align-items: center; gap: 8px; flex: none; white-space: nowrap; }
   .pct-badge { min-width: 58px; text-align: center; background: var(--accent-light); color: var(--accent); border-radius: 12px; font-size: .75rem; font-weight: 600; padding: 2px 8px; font-variant-numeric: tabular-nums; }
+  .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal { max-width: 560px; width: 100%; max-height: 80vh; overflow-y: auto; margin-bottom: 0; }
+  input[type="checkbox"] { width: auto; min-width: auto; min-height: 0; }
   .btn { margin-top: 14px; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: .95rem; cursor: pointer; font-weight: 600; }
   .btn.secondary { background: var(--card); color: var(--accent); border: 1px solid var(--accent); }
   .btn.danger { background: var(--danger); }
@@ -261,6 +264,17 @@
 </section>
 
 </main>
+<div class="modal-mask" id="dupMask" style="display:none">
+  <div class="modal card">
+    <h2 data-i18n="dupTitle"></h2>
+    <p class="muted" data-i18n="dupHelp" style="line-height:1.6"></p>
+    <div id="dupList"></div>
+    <div style="margin-top:14px">
+      <button class="btn" data-i18n="dupReplace" onclick="applyDupReplace()"></button>
+      <button class="btn secondary" data-i18n="dupKeep" onclick="closeDup()" style="margin-left:8px"></button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -301,6 +315,12 @@ const I18N = {
     dmLight: "淺色", dmDark: "深色", dmAuto: "自動（跟隨系統）",
     themeNames: { indigo: "靛藍", forest: "森林綠", sunset: "暖陽橘", violet: "紫羅蘭" },
     editMode: "編輯支出", btnUpdate: "更新", btnCancelEdit: "取消編輯", updatedOk: "已更新 ✓",
+    dupTitle: "發現疑似重複的手動紀錄",
+    dupHelp: "以下手動輸入的紀錄與剛匯入的發票「同一天、同金額」。發票已完整匯入，勾選的手動紀錄會被刪除（以發票資料為準）；不確定是不是同一筆的請取消勾選。",
+    dupReplace: "取代勾選的手動紀錄", dupKeep: "全部保留",
+    dupManual: "手動", dupInvoice: "發票",
+    dupAmbiguous: "⚠ 同日同金額有多張發票，預設不勾選，請自行確認",
+    dupDone: n => `已取代 ${n} 筆手動紀錄`,
     months: ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
     langLabel: "EN",
     cats: { food: "飲食", drink: "飲品", transport: "交通", shopping: "購物", clothing: "服飾", entertainment: "娛樂", travel: "旅遊", education: "教育/書籍", beauty: "美容/理髮", health: "醫療", bills: "帳單", discount: "紅利折扣", other: "其他" }
@@ -340,6 +360,12 @@ const I18N = {
     dmLight: "Light", dmDark: "Dark", dmAuto: "Auto (follow system)",
     themeNames: { indigo: "Indigo", forest: "Forest", sunset: "Sunset", violet: "Violet" },
     editMode: "Edit expense", btnUpdate: "Update", btnCancelEdit: "Cancel", updatedOk: "Updated ✓",
+    dupTitle: "Possible duplicate manual records",
+    dupHelp: "These manually-entered records share the same date and amount as invoices you just imported. The invoices are fully imported already — checked manual records will be deleted (invoice data wins). Uncheck anything you're not sure about.",
+    dupReplace: "Replace checked", dupKeep: "Keep all",
+    dupManual: "Manual", dupInvoice: "Invoice",
+    dupAmbiguous: "⚠ Multiple invoices share this date & amount — unchecked by default, please verify",
+    dupDone: n => `Replaced ${n} manual record(s)`,
     months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
     langLabel: "中文",
     cats: { food: "Food", drink: "Drinks", transport: "Transport", shopping: "Shopping", clothing: "Clothing", entertainment: "Entertainment", travel: "Travel", education: "Education", beauty: "Personal care", health: "Health", bills: "Bills", discount: "Rewards/Discount", other: "Other" }
@@ -638,6 +664,7 @@ function importCSV(text) {
   const existing = new Set(expenses.filter(x => x.inv).map(invKey));
   const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter(l => l.trim());
   let added = 0, skipped = 0, parsedAny = false;
+  const newRecs = [];
 
   const isHeaderFmt = lines.length && lines[0].includes("發票號碼") && lines[0].includes("發票日期");
   if (isHeaderFmt) {
@@ -679,6 +706,7 @@ function importCSV(text) {
       }
       if (rec.amount <= 0) continue; // fully-discounted / zero invoices
       expenses.push(rec);
+      newRecs.push(rec);
       existing.add(invKey(rec));
       added++;
     }
@@ -698,6 +726,7 @@ function importCSV(text) {
       const rec = { id: uid(), date: normDate((cols[3] || "").trim()), desc: store, amount: amt, cat: guessCategory(store), src: "invoice", inv };
       if (existing.has(invKey(rec))) { skipped++; continue; }
       expenses.push(rec);
+      newRecs.push(rec);
       existing.add(invKey(rec));
       added++;
     }
@@ -707,6 +736,54 @@ function importCSV(text) {
   toast(t("importedOk", added, skipped));
   renderAll();
   showView("records");
+  // review manual records that look like duplicates of the invoices just imported
+  const pairs = findManualDupes(newRecs);
+  if (pairs.length) showDupReview(pairs);
+}
+
+// ---------- duplicate review (manual entry vs imported invoice) ----------
+let dupPairs = [];
+function findManualDupes(newRecs) {
+  const manuals = expenses.filter(x => x.src === "manual" && !x.inv);
+  const pairs = [];
+  for (const m of manuals) {
+    const cands = newRecs.filter(r => r.date === m.date && r.amount === m.amount);
+    if (cands.length) pairs.push({ m, cands });
+  }
+  return pairs;
+}
+function showDupReview(pairs) {
+  dupPairs = pairs;
+  document.getElementById("dupList").innerHTML = pairs.map((p, i) => `
+    <label style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
+      <input type="checkbox" data-dup="${i}" ${p.cands.length === 1 ? "checked" : ""} style="margin-top:4px">
+      <span style="flex:1;font-size:.88rem">
+        <div><span class="tag">${t("dupManual")}</span> ${p.m.date} · ${escapeHtml(p.m.desc)} · <b>NT$${p.m.amount.toLocaleString()}</b></div>
+        ${p.cands.map(c => `<div class="muted" style="margin-top:4px"><span class="tag">${t("dupInvoice")}</span> ${escapeHtml(c.desc)} · NT$${c.amount.toLocaleString()} · ${c.inv}</div>`).join("")}
+        ${p.cands.length > 1 ? `<div style="color:var(--warn);font-size:.78rem;margin-top:4px">${t("dupAmbiguous")}</div>` : ""}
+      </span>
+    </label>`).join("");
+  document.getElementById("dupMask").style.display = "flex";
+}
+function applyDupReplace() {
+  const checked = [...document.querySelectorAll("#dupList input[data-dup]:checked")].map(el => +el.dataset.dup);
+  let n = 0;
+  for (const idx of checked) {
+    const id = dupPairs[idx].m.id;
+    if (expenses.some(e => e.id === id)) {
+      expenses = expenses.filter(e => e.id !== id);
+      deletedIds.push(id); // tombstone so it doesn't come back via sync
+      n++;
+    }
+  }
+  save(); saveDeleted();
+  closeDup();
+  toast(t("dupDone", n));
+  renderAll();
+}
+function closeDup() {
+  document.getElementById("dupMask").style.display = "none";
+  dupPairs = [];
 }
 // drag & drop
 const dz = document.getElementById("dropZone");
