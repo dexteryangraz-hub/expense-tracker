@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>記帳本 Expense Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1f2430; --muted: #6b7280;
+    --accent: #2563eb; --accent-light: #dbeafe; --danger: #dc2626; --ok: #16a34a;
+    --border: #e5e7eb; --warn: #d97706;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  header { background: var(--card); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 1.15rem; }
+  .lang-btn { border: 1px solid var(--accent); background: var(--accent-light); color: var(--accent); border-radius: 20px; padding: 6px 16px; cursor: pointer; font-weight: 600; font-size: .9rem; }
+  nav { display: flex; gap: 4px; background: var(--card); padding: 8px 20px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  nav button { border: none; background: transparent; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: .95rem; color: var(--muted); white-space: nowrap; }
+  nav button.active { background: var(--accent); color: #fff; }
+  main { max-width: 960px; margin: 0 auto; padding: 20px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 18px; }
+  .card h2 { font-size: 1rem; margin-bottom: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 700px) { .grid2 { grid-template-columns: 1fr; } }
+  label { display: block; font-size: .82rem; color: var(--muted); margin: 10px 0 4px; }
+  input, select { width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: .95rem; background: #fff; }
+  .btn { margin-top: 14px; background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 18px; font-size: .95rem; cursor: pointer; font-weight: 600; }
+  .btn.secondary { background: #fff; color: var(--accent); border: 1px solid var(--accent); }
+  .btn.danger { background: var(--danger); }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: .78rem; background: var(--accent-light); color: var(--accent); }
+  .filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .stat { font-size: 1.6rem; font-weight: 700; }
+  .stat-label { color: var(--muted); font-size: .82rem; }
+  .budget-row { margin-bottom: 14px; }
+  .budget-bar { height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; margin-top: 4px; }
+  .budget-fill { height: 100%; background: var(--ok); border-radius: 5px; transition: width .3s; }
+  .budget-fill.over { background: var(--danger); }
+  .budget-fill.near { background: var(--warn); }
+  .flex { display: flex; justify-content: space-between; align-items: center; }
+  .muted { color: var(--muted); font-size: .85rem; }
+  .del { color: var(--danger); cursor: pointer; background: none; border: none; font-size: 1rem; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--text); color: #fff; padding: 10px 20px; border-radius: 8px; font-size: .9rem; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 99; }
+  .toast.show { opacity: 1; }
+  .drop { border: 2px dashed var(--border); border-radius: 12px; padding: 28px; text-align: center; color: var(--muted); cursor: pointer; }
+  .drop.over { border-color: var(--accent); background: var(--accent-light); }
+  .chart-wrap { position: relative; height: 260px; }
+  .month-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .month-nav button { border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 1rem; }
+  .month-nav span { font-weight: 700; font-size: 1.05rem; min-width: 110px; text-align: center; }
+  .item-row { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+  .item-row input:nth-child(1) { flex: 2; }
+  .item-row input:nth-child(2) { width: 74px; flex: none; }
+  .item-row input:nth-child(3) { width: 110px; flex: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="appTitle"></h1>
+  <button class="lang-btn" id="langBtn" onclick="toggleLang()"></button>
+</header>
+<nav>
+  <button data-view="dashboard" class="active" data-i18n="navDashboard" onclick="showView('dashboard')"></button>
+  <button data-view="add" data-i18n="navAdd" onclick="showView('add')"></button>
+  <button data-view="records" data-i18n="navRecords" onclick="showView('records')"></button>
+  <button data-view="import" data-i18n="navImport" onclick="showView('import')"></button>
+  <button data-view="settings" data-i18n="navSettings" onclick="showView('settings')"></button>
+</nav>
+<main>
+
+<!-- DASHBOARD -->
+<section id="view-dashboard">
+  <div class="month-nav">
+    <button onclick="changeMonth(-1)">‹</button>
+    <span id="monthLabel"></span>
+    <button onclick="changeMonth(1)">›</button>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="stat-label" data-i18n="totalSpent"></div>
+      <div class="stat" id="statTotal">$0</div>
+      <div class="muted" id="statCount"></div>
+    </div>
+    <div class="card">
+      <div class="stat-label" data-i18n="budgetRemaining"></div>
+      <div class="stat" id="statRemaining">—</div>
+      <div class="muted" id="statBudgetNote"></div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h2 data-i18n="byCategory"></h2>
+      <div class="chart-wrap"><canvas id="pieChart"></canvas></div>
+      <div id="catBreakdown" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="dailyTrend"></h2>
+      <div class="chart-wrap"><canvas id="barChart"></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2 data-i18n="budgets"></h2>
+    <div id="budgetBars"></div>
+  </div>
+</section>
+
+<!-- ADD -->
+<section id="view-add" style="display:none">
+  <div class="card">
+    <h2 data-i18n="addExpense"></h2>
+    <label data-i18n="fDate"></label>
+    <input type="date" id="fDate">
+    <label data-i18n="fDesc"></label>
+    <input type="text" id="fDesc" data-i18n-ph="phDesc">
+    <label data-i18n="fAmount"></label>
+    <input type="number" id="fAmount" min="0" step="1" placeholder="NT$">
+    <label data-i18n="fCategory"></label>
+    <select id="fCategory"></select>
+    <label data-i18n="itemsOptional"></label>
+    <div id="itemRows"></div>
+    <button type="button" class="btn secondary" data-i18n="addItem" onclick="addItemRow()" style="margin-top:6px;padding:6px 12px;font-size:.85rem"></button>
+    <br>
+    <button class="btn" data-i18n="btnSave" onclick="addManual()"></button>
+  </div>
+</section>
+
+<!-- RECORDS -->
+<section id="view-records" style="display:none">
+  <div class="card">
+    <h2 data-i18n="navRecords"></h2>
+    <div class="filters">
+      <div><label data-i18n="fltFrom"></label><input type="date" id="fltFrom" onchange="renderRecords()"></div>
+      <div><label data-i18n="fltTo"></label><input type="date" id="fltTo" onchange="renderRecords()"></div>
+      <div><label data-i18n="fCategory"></label><select id="fltCat" onchange="renderRecords()"></select></div>
+      <div><label data-i18n="fltSearch"></label><input type="text" id="fltSearch" data-i18n-ph="phSearch" oninput="renderRecords()"></div>
+    </div>
+    <div class="muted" id="fltSummary" style="margin-bottom:8px"></div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th data-i18n="fDate"></th><th data-i18n="fDesc"></th><th data-i18n="fCategory"></th>
+        <th style="text-align:right" data-i18n="fAmount"></th><th></th>
+      </tr></thead>
+      <tbody id="recordsBody"></tbody>
+    </table>
+    </div>
+  </div>
+</section>
+
+<!-- IMPORT -->
+<section id="view-import" style="display:none">
+  <div class="card">
+    <h2 data-i18n="importTitle"></h2>
+    <p class="muted" data-i18n="importHelp" style="margin-bottom:14px; line-height:1.6"></p>
+    <div class="drop" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <span data-i18n="dropHint"></span>
+      <input type="file" id="fileInput" accept=".csv,.txt" style="display:none" onchange="handleFile(this.files[0])">
+    </div>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section id="view-settings" style="display:none">
+  <div class="card">
+    <h2 data-i18n="budgetSettings"></h2>
+    <p class="muted" data-i18n="budgetHelp"></p>
+    <div id="budgetInputs"></div>
+    <button class="btn" data-i18n="btnSave" onclick="saveBudgets()"></button>
+  </div>
+  <div class="card">
+    <h2 data-i18n="syncTitle"></h2>
+    <p class="muted" data-i18n="syncHelp" style="line-height:1.6"></p>
+    <label data-i18n="syncRepo"></label>
+    <input type="text" id="ghRepo" placeholder="username/expense-data" autocomplete="off">
+    <label data-i18n="syncToken"></label>
+    <input type="password" id="ghToken" placeholder="github_pat_…" autocomplete="off">
+    <button class="btn" data-i18n="btnSync" onclick="ghSync()"></button>
+    <p class="muted" id="syncStatus" style="margin-top:10px"></p>
+  </div>
+  <div class="card">
+    <h2 data-i18n="dataTitle"></h2>
+    <button class="btn secondary" data-i18n="btnExport" onclick="exportCSV()"></button>
+    <button class="btn secondary" data-i18n="btnBackup" onclick="exportJSON()" style="margin-left:8px"></button>
+    <br>
+    <button class="btn secondary" data-i18n="btnRestore" onclick="document.getElementById('restoreInput').click()"></button>
+    <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="restoreJSON(this.files[0])">
+    <button class="btn danger" data-i18n="btnClear" onclick="clearAll()" style="margin-left:8px"></button>
+  </div>
+</section>
+
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- i18n ----------
+const I18N = {
+  zh: {
+    appTitle: "我的記帳本", navDashboard: "總覽", navAdd: "新增支出", navRecords: "消費紀錄",
+    navImport: "匯入發票", navSettings: "設定", totalSpent: "本月支出", budgetRemaining: "預算剩餘",
+    byCategory: "分類佔比", dailyTrend: "每日支出", budgets: "預算進度", addExpense: "新增支出",
+    fDate: "日期", fDesc: "說明 / 店家", fAmount: "金額", fCategory: "分類",
+    btnSave: "儲存", phDesc: "例如：全聯 晚餐食材", phSearch: "搜尋店家或說明…",
+    fltFrom: "起始日", fltTo: "結束日", fltSearch: "關鍵字",
+    importTitle: "匯入電子發票 CSV",
+    importHelp: "到「財政部電子發票整合服務平台」登入後，於載具消費紀錄頁面匯出 CSV 檔，再拖曳到下方即可。已匯入過的發票（相同發票號碼）會自動略過，不會重複。",
+    dropHint: "點擊或拖曳 CSV 檔案到這裡",
+    budgetSettings: "每月預算", budgetHelp: "每個分類的每月預算（留空 = 不設定）",
+    dataTitle: "資料管理", btnExport: "匯出 CSV", btnBackup: "備份 (JSON)",
+    btnRestore: "還原備份", btnClear: "清除全部資料",
+    confirmClear: "確定要刪除所有資料嗎？此動作無法復原。",
+    confirmDel: "刪除這筆紀錄？",
+    savedOk: "已儲存 ✓", deletedOk: "已刪除", importedOk: (n, s) => `匯入 ${n} 筆發票（略過 ${s} 筆重複）`,
+    importFail: "無法解析檔案，請確認是平台匯出的 CSV", restoredOk: "備份已還原",
+    records: (n, t) => `${n} 筆，共 NT$${t.toLocaleString()}`,
+    budgetOf: (used, total) => `NT$${used.toLocaleString()} / NT$${total.toLocaleString()}`,
+    noBudget: "尚未設定預算（可至「設定」新增）", allCats: "全部分類",
+    invoicePrefix: "發票", overBudget: "超支", itemsLabel: "購買品項",
+    itemsOptional: "購買品項（選填，金額會自動加總）", addItem: "＋ 新增品項",
+    phItemName: "品名", phQty: "數量", phItemAmt: "金額",
+    syncTitle: "GitHub 雲端同步",
+    syncHelp: "把資料存在你自己的「私人」GitHub repo（和放 App 的公開 repo 分開）。在每台裝置輸入相同設定後按「立即同步」，就會自動合併兩邊的紀錄。Token 只存在你的裝置上。",
+    syncRepo: "私人資料 Repo（帳號/名稱）", syncToken: "Fine-grained Access Token",
+    btnSync: "立即同步", syncOk: "同步完成 ✓", syncErr: "同步失敗：", syncMissing: "請先填入 Repo 與 Token",
+    syncNever: "尚未同步過", lastSync: "上次同步：", syncing: "同步中…",
+    months: ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
+    langLabel: "EN",
+    cats: { food: "飲食", drink: "飲品", transport: "交通", shopping: "購物", clothing: "服飾", entertainment: "娛樂", travel: "旅遊", education: "教育/書籍", beauty: "美容/理髮", health: "醫療", bills: "帳單", discount: "紅利折扣", other: "其他" }
+  },
+  en: {
+    appTitle: "My Expense Tracker", navDashboard: "Dashboard", navAdd: "Add Expense", navRecords: "Records",
+    navImport: "Import Invoices", navSettings: "Settings", totalSpent: "Spent this month", budgetRemaining: "Budget remaining",
+    byCategory: "By category", dailyTrend: "Daily spending", budgets: "Budget progress", addExpense: "Add expense",
+    fDate: "Date", fDesc: "Description / Store", fAmount: "Amount", fCategory: "Category",
+    btnSave: "Save", phDesc: "e.g. PX Mart – dinner groceries", phSearch: "Search store or description…",
+    fltFrom: "From", fltTo: "To", fltSearch: "Keyword",
+    importTitle: "Import e-invoice CSV",
+    importHelp: "Log in to the MOF E-Invoice Platform, export your carrier (載具) invoice history as CSV, then drop the file below. Invoices already imported (same invoice number) are skipped automatically.",
+    dropHint: "Click or drag a CSV file here",
+    budgetSettings: "Monthly budgets", budgetHelp: "Monthly budget per category (blank = no budget)",
+    dataTitle: "Data", btnExport: "Export CSV", btnBackup: "Backup (JSON)",
+    btnRestore: "Restore backup", btnClear: "Clear all data",
+    confirmClear: "Delete ALL data? This cannot be undone.",
+    confirmDel: "Delete this record?",
+    savedOk: "Saved ✓", deletedOk: "Deleted", importedOk: (n, s) => `Imported ${n} invoices (${s} duplicates skipped)`,
+    importFail: "Couldn't parse the file. Please use the CSV exported from the platform.", restoredOk: "Backup restored",
+    records: (n, t) => `${n} records, total NT$${t.toLocaleString()}`,
+    budgetOf: (used, total) => `NT$${used.toLocaleString()} / NT$${total.toLocaleString()}`,
+    noBudget: "No budgets set yet (add them in Settings)", allCats: "All categories",
+    invoicePrefix: "Invoice", overBudget: "over", itemsLabel: "Items",
+    itemsOptional: "Items (optional — amounts sum automatically)", addItem: "＋ Add item",
+    phItemName: "Item name", phQty: "Qty", phItemAmt: "Amount",
+    syncTitle: "GitHub Cloud Sync",
+    syncHelp: "Stores your data in your own PRIVATE GitHub repo (separate from the public repo hosting the app). Enter the same settings on each device and press Sync — records from both sides are merged automatically. The token never leaves your devices.",
+    syncRepo: "Private data repo (username/name)", syncToken: "Fine-grained access token",
+    btnSync: "Sync now", syncOk: "Synced ✓", syncErr: "Sync failed: ", syncMissing: "Enter repo and token first",
+    syncNever: "Never synced", lastSync: "Last sync: ", syncing: "Syncing…",
+    months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+    langLabel: "中文",
+    cats: { food: "Food", drink: "Drinks", transport: "Transport", shopping: "Shopping", clothing: "Clothing", entertainment: "Entertainment", travel: "Travel", education: "Education", beauty: "Personal care", health: "Health", bills: "Bills", discount: "Rewards/Discount", other: "Other" }
+  }
+};
+const CAT_KEYS = ["food","drink","transport","shopping","clothing","entertainment","travel","education","beauty","health","bills","discount","other"];
+const CAT_COLORS = { food:"#f59e0b", drink:"#06b6d4", transport:"#3b82f6", shopping:"#ec4899", clothing:"#d946ef", entertainment:"#8b5cf6", travel:"#14b8a6", education:"#6366f1", beauty:"#f472b6", health:"#10b981", bills:"#64748b", discount:"#84cc16", other:"#9ca3af" };
+
+let lang = localStorage.getItem("et_lang") || "zh";
+const t = (k, ...a) => { const v = I18N[lang][k]; return typeof v === "function" ? v(...a) : v; };
+
+// ---------- state ----------
+let expenses = JSON.parse(localStorage.getItem("et_expenses") || "[]");
+let budgets  = JSON.parse(localStorage.getItem("et_budgets") || "{}");
+let deletedIds = JSON.parse(localStorage.getItem("et_deleted") || "[]");
+const saveDeleted = () => localStorage.setItem("et_deleted", JSON.stringify(deletedIds.slice(-2000)));
+let curMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+let pieChart = null, barChart = null;
+
+const save = () => localStorage.setItem("et_expenses", JSON.stringify(expenses));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+// ---------- auto-categorization (imported store names) ----------
+const CAT_RULES = [
+  [/(星巴克|Starbucks|路易莎|Louisa|85度|50嵐|清心|可不可|迷客夏|茶湯會|CoCo|大苑子|龜記|一芳|珍煮丹|鮮茶道|Comebuy|麻古|得正|手搖|茶飲)/i, "drink"],
+  [/(悠遊卡|一卡通|台鐵|高鐵|捷運|客運|公車|加油|中油|台亞|全國加油|停車|Uber|計程|租車|iRent|GoShare|WeMo)/i, "transport"],
+  [/(藥局|藥妝|屈臣氏|康是美|Watsons|診所|醫院|牙醫|眼科|藥師)/i, "health"],
+  [/(電影|威秀|秀泰|國賓|KTV|錢櫃|好樂迪|遊戲|Steam|Netflix|Spotify|YouTube)/i, "entertainment"],
+  [/(航空|機票|飯店|旅館|旅店|旅行社|訂房|Agoda|Booking|airbnb|hotel)/i, "travel"],
+  [/(書局|書店|博客來|誠品|文具|補習|課程|出版)/i, "education"],
+  [/(美容|美髮|理髮|剪髮|燙髮|護膚|SPA|沙龍|美甲)/i, "beauty"],
+  [/(UNIQLO|GU|NET|ZARA|H&M|lativ|服飾|服裝|製衣|鞋)/i, "clothing"],
+  [/(電信|中華電信|台灣大哥大|遠傳|台灣之星|水費|電費|瓦斯|台電|自來水)/i, "bills"],
+  [/(7-?ELEVEN|統一超商|全家|FamilyMart|萊爾富|OK超商|全聯|家樂福|Carrefour|大潤發|美廉社|麥當勞|肯德基|KFC|摩斯|咖啡|餐|飯|麵|食|燒|烤|鍋|茶|飲|早午|便當|小吃|吃|商行|坊)/i, "food"],
+  [/(momo|蝦皮|Shopee|PChome|IKEA|宜得利|特力屋|燦坤|全國電子|3C)/i, "shopping"],
+];
+function guessCategory(name) {
+  for (const [re, cat] of CAT_RULES) if (re.test(name)) return cat;
+  return "other";
+}
+// item-level guess: negative lines = rewards/discount; drink-like names = drink; otherwise inherit invoice category
+const ITEM_DRINK = /(咖啡|拿鐵|美式|卡布|摩卡|歐蕾|紅茶|綠茶|青茶|奶茶|烏龍|冬瓜|果汁|可樂|汽水|雪碧|礦泉水|氣泡水|豆漿|優酪|鮮奶|啤酒|調酒|飲料|茶$)/i;
+function guessItemCategory(name, amt) {
+  if (amt < 0) return "discount";
+  if (ITEM_DRINK.test(name)) return "drink";
+  return undefined; // inherit invoice category
+}
+
+// ---------- i18n rendering ----------
+function applyLang() {
+  document.documentElement.lang = lang === "zh" ? "zh-Hant" : "en";
+  document.querySelectorAll("[data-i18n]").forEach(el => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => el.placeholder = t(el.dataset.i18nPh));
+  document.getElementById("langBtn").textContent = t("langLabel");
+  fillCategorySelects();
+  renderAll();
+}
+function toggleLang() {
+  lang = lang === "zh" ? "en" : "zh";
+  localStorage.setItem("et_lang", lang);
+  applyLang();
+}
+function fillCategorySelects() {
+  const opts = CAT_KEYS.map(k => `<option value="${k}">${t("cats")[k]}</option>`).join("");
+  document.getElementById("fCategory").innerHTML = opts;
+  document.getElementById("fltCat").innerHTML = `<option value="">${t("allCats")}</option>` + opts;
+  renderBudgetInputs();
+}
+
+// ---------- views ----------
+function showView(v) {
+  document.querySelectorAll("main > section").forEach(s => s.style.display = "none");
+  document.getElementById("view-" + v).style.display = "";
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+  if (v === "dashboard") renderDashboard();
+  if (v === "records") renderRecords();
+}
+
+// ---------- add manual ----------
+function addItemRow() {
+  const row = document.createElement("div");
+  row.className = "item-row";
+  row.innerHTML = `
+    <input type="text" data-i18n-ph="phItemName" placeholder="${t("phItemName")}">
+    <input type="number" min="1" step="1" value="1" data-i18n-ph="phQty" placeholder="${t("phQty")}">
+    <input type="number" min="0" step="1" data-i18n-ph="phItemAmt" placeholder="${t("phItemAmt")}" oninput="syncItemTotal()">
+    <button class="del" type="button" onclick="this.parentNode.remove();syncItemTotal()">✕</button>`;
+  document.getElementById("itemRows").appendChild(row);
+  row.querySelector("input").focus();
+}
+function collectItems() {
+  return [...document.querySelectorAll("#itemRows .item-row")].map(r => {
+    const [n, q, a] = [...r.querySelectorAll("input")].map(i => i.value.trim());
+    return { n, q: parseFloat(q) || 1, p: 0, a: parseFloat(a) || 0 };
+  }).filter(it => it.n || it.a > 0);
+}
+function syncItemTotal() {
+  const items = collectItems();
+  if (items.length && items.some(it => it.a > 0))
+    document.getElementById("fAmount").value = items.reduce((s, it) => s + it.a, 0);
+}
+function addManual() {
+  const date = document.getElementById("fDate").value;
+  const desc = document.getElementById("fDesc").value.trim();
+  const amount = parseFloat(document.getElementById("fAmount").value);
+  const cat = document.getElementById("fCategory").value;
+  if (!date || !desc || !(amount > 0)) return;
+  const rec = { id: uid(), date, desc, amount, cat, src: "manual" };
+  const items = collectItems().map(it => {
+    const out = { ...it, n: it.n || "—" };
+    const ic = guessItemCategory(out.n, out.a);
+    if (ic) out.c = ic;
+    return out;
+  });
+  if (items.length) rec.items = items;
+  expenses.push(rec);
+  save();
+  document.getElementById("fDesc").value = "";
+  document.getElementById("fAmount").value = "";
+  document.getElementById("itemRows").innerHTML = "";
+  toast(t("savedOk"));
+  renderAll();
+}
+
+// ---------- CSV import (MOF e-invoice platform format: pipe-delimited, M/D rows) ----------
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try { importCSV(e.target.result); }
+    catch (err) { toast(t("importFail")); }
+  };
+  reader.readAsText(file, "UTF-8");
+}
+function normDate(rawDate) {
+  if (/^\d{8}$/.test(rawDate)) return `${rawDate.slice(0,4)}-${rawDate.slice(4,6)}-${rawDate.slice(6,8)}`;
+  if (/^\d{3}\/\d{2}\/\d{2}$/.test(rawDate)) { // ROC year
+    const [y, m, d] = rawDate.split("/");
+    return `${parseInt(y) + 1911}-${m}-${d}`;
+  }
+  return rawDate.replace(/\//g, "-");
+}
+// CSV line parser that handles quoted fields
+function parseCsvLine(line) {
+  const out = []; let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQ) {
+      if (c === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else inQ = false; }
+      else cur += c;
+    } else if (c === '"') inQ = true;
+    else if (c === ",") { out.push(cur); cur = ""; }
+    else cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+// dedup key: invoice number + year-month (invoice numbers recycle every 2 months)
+const invKey = x => x.inv + "@" + (x.date || "").slice(0, 7);
+function importCSV(text) {
+  const existing = new Set(expenses.filter(x => x.inv).map(invKey));
+  const lines = text.replace(/^﻿/, "").split(/\r?\n/).filter(l => l.trim());
+  let added = 0, skipped = 0, parsedAny = false;
+
+  const isHeaderFmt = lines.length && lines[0].includes("發票號碼") && lines[0].includes("發票日期");
+  if (isHeaderFmt) {
+    // New platform format: one row per line item, comma-separated with header:
+    // 載具自訂名稱,發票日期,發票號碼,發票金額,發票狀態,折讓,賣方統一編號,賣方名稱,賣方地址,買方統編,消費明細_數量,消費明細_單價,消費明細_金額,消費明細_品名
+    const NCOL = parseCsvLine(lines[0]).length; // usually 14
+    const invoices = new Map(); // inv# -> {date, store, amount}
+    for (let i = 1; i < lines.length; i++) {
+      let cols = parseCsvLine(lines[i]);
+      if (cols.length < NCOL) continue; // footer/note lines
+      if (cols.length > NCOL) {
+        // Platform doesn't quote the address field; merge extra commas back into 賣方地址 (col 8)
+        const extra = cols.length - NCOL;
+        cols = [...cols.slice(0, 8), cols.slice(8, 9 + extra).join(","), ...cols.slice(9 + extra)];
+      }
+      const c = cols.map(s => s.trim());
+      const rawDate = c[1], inv = c[2], invAmt = c[3], status = c[4], store = c[7];
+      const qty = c[10], price = c[11], lineAmt = c[12], itemName = c[13];
+      if (!inv || !/^\d{8}$/.test(rawDate)) continue;
+      parsedAny = true;
+      if (status.includes("作廢")) continue;
+      const amt = parseFloat(lineAmt !== "" ? lineAmt : invAmt);
+      if (isNaN(amt)) continue;
+      const date = normDate(rawDate);
+      const item = { n: itemName || "—", q: parseFloat(qty) || 1, p: parseFloat(price) || 0, a: amt };
+      const ic = guessItemCategory(item.n, amt);
+      if (ic) item.c = ic;
+      if (invoices.has(inv)) { const v = invoices.get(inv); v.amount += amt; v.items.push(item); } // sum line items (incl. negative discounts)
+      else invoices.set(inv, { date, store, amount: amt, items: [item] });
+    }
+    for (const [inv, v] of invoices) {
+      const rec = { id: uid(), date: v.date, desc: v.store, amount: v.amount, cat: guessCategory(v.store), src: "invoice", inv, items: v.items };
+      if (existing.has(invKey(rec))) {
+        // already imported: attach items to the existing record if it doesn't have them yet
+        const old = expenses.find(x => x.inv && invKey(x) === invKey(rec));
+        if (old && !old.items) old.items = v.items;
+        skipped++;
+        continue;
+      }
+      if (rec.amount <= 0) continue; // fully-discounted / zero invoices
+      expenses.push(rec);
+      existing.add(invKey(rec));
+      added++;
+    }
+  } else {
+    // Legacy format: pipe-delimited M/D rows
+    for (const line of lines) {
+      const cols = line.includes("|") ? line.split("|") : line.split(",");
+      if (cols[0].trim() !== "M") continue;
+      // M|載具名稱|載具號碼|發票日期|商店統編|商店店名|發票號碼|總金額|發票狀態
+      const store = (cols[5] || "").trim();
+      const inv = (cols[6] || "").trim();
+      const amt = parseFloat((cols[7] || "").replace(/[^\d.]/g, ""));
+      const status = (cols[8] || "").trim();
+      if (!inv || !(amt >= 0)) continue;
+      parsedAny = true;
+      if (status.includes("作廢")) continue;
+      const rec = { id: uid(), date: normDate((cols[3] || "").trim()), desc: store, amount: amt, cat: guessCategory(store), src: "invoice", inv };
+      if (existing.has(invKey(rec))) { skipped++; continue; }
+      expenses.push(rec);
+      existing.add(invKey(rec));
+      added++;
+    }
+  }
+  if (!parsedAny && !skipped) { toast(t("importFail")); return; }
+  save();
+  toast(t("importedOk", added, skipped));
+  renderAll();
+  showView("records");
+}
+// drag & drop
+const dz = document.getElementById("dropZone");
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("over"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); handleFile(e.dataTransfer.files[0]); });
+
+// ---------- records ----------
+function renderRecords() {
+  const from = document.getElementById("fltFrom").value;
+  const to = document.getElementById("fltTo").value;
+  const cat = document.getElementById("fltCat").value;
+  const q = document.getElementById("fltSearch").value.trim().toLowerCase();
+  const rows = expenses
+    .filter(x => (!from || x.date >= from) && (!to || x.date <= to) &&
+                 (!cat || x.cat === cat || (x.items || []).some(it => it.c === cat)) &&
+                 (!q || x.desc.toLowerCase().includes(q) || (x.items || []).some(it => (it.n || "").toLowerCase().includes(q))))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const total = rows.reduce((s, x) => s + x.amount, 0);
+  document.getElementById("fltSummary").textContent = t("records", rows.length, total);
+  document.getElementById("recordsBody").innerHTML = rows.map(x => {
+    const hasItems = x.items && x.items.length;
+    const main = `
+    <tr${hasItems ? ` class="expandable" onclick="toggleItems('${x.id}')" style="cursor:pointer"` : ""}>
+      <td>${x.date}</td>
+      <td>${hasItems ? `<span class="arrow" id="arrow-${x.id}">▸</span> ` : ""}${escapeHtml(x.desc)}${x.inv ? ` <span class="muted" title="${t("invoicePrefix")}">${x.inv}</span>` : ""}</td>
+      <td onclick="event.stopPropagation()"><select onchange="setCat('${x.id}', this.value)" style="width:auto;padding:3px 6px;font-size:.82rem">
+        ${CAT_KEYS.map(k => `<option value="${k}" ${k === x.cat ? "selected" : ""}>${t("cats")[k]}</option>`).join("")}
+      </select></td>
+      <td class="num">NT$${x.amount.toLocaleString()}</td>
+      <td onclick="event.stopPropagation()"><button class="del" onclick="delExpense('${x.id}')">✕</button></td>
+    </tr>`;
+    if (!hasItems) return main;
+    const itemRows = x.items.map((it, i) => `
+      <div class="flex" style="padding:2px 0">
+        <span>${escapeHtml(it.n)}${it.q > 1 ? ` <span class="muted">×${it.q}</span>` : ""}</span>
+        <span>
+          <select onchange="setItemCat('${x.id}',${i},this.value)" style="width:auto;padding:2px 4px;font-size:.78rem;margin-right:8px">
+            ${CAT_KEYS.map(k => `<option value="${k}" ${k === (it.c || x.cat) ? "selected" : ""}>${t("cats")[k]}</option>`).join("")}
+          </select>
+          <span class="muted">NT$${it.a.toLocaleString()}</span>
+        </span>
+      </div>`).join("");
+    return main + `
+    <tr id="items-${x.id}" style="display:none">
+      <td></td>
+      <td colspan="4" style="background:var(--bg);border-radius:8px;padding:10px 14px">
+        <div class="muted" style="font-weight:600;margin-bottom:4px">${t("itemsLabel")}</div>${itemRows}
+      </td>
+    </tr>`;
+  }).join("");
+}
+function toggleItems(id) {
+  const row = document.getElementById("items-" + id);
+  const arrow = document.getElementById("arrow-" + id);
+  const open = row.style.display === "none";
+  row.style.display = open ? "" : "none";
+  if (arrow) arrow.textContent = open ? "▾" : "▸";
+}
+function setCat(id, cat) {
+  const x = expenses.find(e => e.id === id);
+  if (x) { x.cat = cat; save(); renderDashboard(); }
+}
+function setItemCat(id, idx, cat) {
+  const x = expenses.find(e => e.id === id);
+  if (!x || !x.items || !x.items[idx]) return;
+  x.items[idx].c = cat;
+  save();
+  renderDashboard();
+}
+function delExpense(id) {
+  if (!confirm(t("confirmDel"))) return;
+  expenses = expenses.filter(e => e.id !== id);
+  deletedIds.push(id); saveDeleted();
+  save(); toast(t("deletedOk")); renderAll();
+}
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+// ---------- dashboard ----------
+// returns [category, amount] pairs for an expense; items may carry their own category (it.c)
+function catAmounts(x) {
+  if (!x.items || !x.items.length) return [[x.cat, x.amount]];
+  const m = {};
+  let itemSum = 0;
+  x.items.forEach(it => { const c = it.c || x.cat; m[c] = (m[c] || 0) + it.a; itemSum += it.a; });
+  const rest = x.amount - itemSum; // manual entries where items don't cover the full amount
+  if (Math.abs(rest) > 0.001) m[x.cat] = (m[x.cat] || 0) + rest;
+  return Object.entries(m);
+}
+function changeMonth(d) {
+  const [y, m] = curMonth.split("-").map(Number);
+  const nd = new Date(y, m - 1 + d, 1);
+  curMonth = `${nd.getFullYear()}-${String(nd.getMonth() + 1).padStart(2, "0")}`;
+  renderDashboard();
+}
+function renderDashboard() {
+  const [y, m] = curMonth.split("-").map(Number);
+  document.getElementById("monthLabel").textContent = lang === "zh" ? `${y}年 ${t("months")[m-1]}` : `${t("months")[m-1]} ${y}`;
+  const monthExp = expenses.filter(x => x.date.startsWith(curMonth));
+  const total = monthExp.reduce((s, x) => s + x.amount, 0);
+  document.getElementById("statTotal").textContent = "NT$" + total.toLocaleString();
+  document.getElementById("statCount").textContent = t("records", monthExp.length, total);
+
+  // budget remaining
+  const totalBudget = CAT_KEYS.reduce((s, k) => s + (budgets[k] || 0), 0);
+  if (totalBudget > 0) {
+    const rem = totalBudget - total;
+    const el = document.getElementById("statRemaining");
+    el.textContent = "NT$" + rem.toLocaleString();
+    el.style.color = rem < 0 ? "var(--danger)" : "var(--ok)";
+    document.getElementById("statBudgetNote").textContent = t("budgetOf", total, totalBudget);
+  } else {
+    document.getElementById("statRemaining").textContent = "—";
+    document.getElementById("statBudgetNote").textContent = t("noBudget");
+  }
+
+  // pie — split each expense across item-level categories where present
+  const byCat = {};
+  monthExp.forEach(x => { for (const [c, a] of catAmounts(x)) byCat[c] = (byCat[c] || 0) + a; });
+  // pie shows every category (zero-value slices are invisible but stay in the legend);
+  // negative totals (紅利折扣) can't be drawn as slices — they appear in the breakdown list below
+  if (pieChart) pieChart.destroy();
+  pieChart = new Chart(document.getElementById("pieChart"), {
+    type: "doughnut",
+    data: { labels: CAT_KEYS.map(k => t("cats")[k]),
+      datasets: [{ data: CAT_KEYS.map(k => Math.max(byCat[k] || 0, 0)), backgroundColor: CAT_KEYS.map(k => CAT_COLORS[k]), borderWidth: 1 }] },
+    options: { maintainAspectRatio: false,
+      plugins: { legend: { position: "right", labels: { boxWidth: 12, font: { size: 10 } } } },
+      onClick: (evt, els) => { if (els.length) drillToCategory(CAT_KEYS[els[0].index]); },
+      onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? "pointer" : "default"; } }
+  });
+
+  // full breakdown list: all categories with amount and share
+  const posTotal = CAT_KEYS.reduce((s, k) => s + Math.max(byCat[k] || 0, 0), 0);
+  document.getElementById("catBreakdown").innerHTML = CAT_KEYS.map(k => {
+    const v = byCat[k] || 0;
+    const pct = v > 0 && posTotal > 0 ? ` · ${(v / posTotal * 100).toFixed(1)}%` : "";
+    return `<div class="flex" style="padding:3px 0;font-size:.85rem;cursor:pointer" onclick="drillToCategory('${k}')">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${CAT_COLORS[k]};margin-right:7px"></span>${t("cats")[k]}</span>
+      <span class="muted" style="${v < 0 ? "color:var(--ok);font-weight:600" : ""}">NT$${v.toLocaleString()}${pct}</span>
+    </div>`;
+  }).join("");
+
+  // daily bar
+  const days = new Date(y, m, 0).getDate();
+  const daily = Array(days).fill(0);
+  monthExp.forEach(x => { const d = parseInt(x.date.slice(8, 10)); if (d >= 1 && d <= days) daily[d - 1] += x.amount; });
+  if (barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById("barChart"), {
+    type: "bar",
+    data: { labels: daily.map((_, i) => i + 1), datasets: [{ data: daily, backgroundColor: "#2563eb" }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 16 } }, y: { beginAtZero: true } } }
+  });
+
+  // budget bars
+  const bb = document.getElementById("budgetBars");
+  const rows = CAT_KEYS.filter(k => budgets[k] > 0);
+  bb.innerHTML = rows.length === 0 ? `<p class="muted">${t("noBudget")}</p>` : rows.map(k => {
+    const used = byCat[k] || 0, b = budgets[k];
+    const pct = Math.min(100, used / b * 100);
+    const cls = used > b ? "over" : pct > 80 ? "near" : "";
+    return `<div class="budget-row">
+      <div class="flex"><span>${t("cats")[k]}</span><span class="muted">${t("budgetOf", used, b)}${used > b ? ` · <span style="color:var(--danger)">${t("overBudget")} NT$${(used - b).toLocaleString()}</span>` : ""}</span></div>
+      <div class="budget-bar"><div class="budget-fill ${cls}" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join("");
+}
+
+// click a pie slice -> records list filtered to that category for the current month
+function drillToCategory(cat) {
+  const [y, m] = curMonth.split("-").map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  document.getElementById("fltCat").value = cat;
+  document.getElementById("fltFrom").value = `${curMonth}-01`;
+  document.getElementById("fltTo").value = `${curMonth}-${String(lastDay).padStart(2, "0")}`;
+  document.getElementById("fltSearch").value = "";
+  showView("records");
+}
+
+// ---------- budgets ----------
+function renderBudgetInputs() {
+  document.getElementById("budgetInputs").innerHTML = CAT_KEYS.map(k => `
+    <label>${t("cats")[k]}</label>
+    <input type="number" min="0" step="100" id="bud_${k}" value="${budgets[k] || ""}" placeholder="NT$">`).join("");
+}
+function saveBudgets() {
+  CAT_KEYS.forEach(k => {
+    const v = parseFloat(document.getElementById("bud_" + k).value);
+    if (v > 0) budgets[k] = v; else delete budgets[k];
+  });
+  localStorage.setItem("et_budgets", JSON.stringify(budgets));
+  toast(t("savedOk"));
+  renderDashboard();
+}
+
+// ---------- export / backup ----------
+function download(name, content, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + content], { type }));
+  a.download = name;
+  a.click();
+}
+function exportCSV() {
+  const head = lang === "zh" ? "日期,說明,分類,金額,發票號碼,來源,購買品項" : "Date,Description,Category,Amount,Invoice,Source,Items";
+  const rows = expenses.slice().sort((a, b) => a.date.localeCompare(b.date))
+    .map(x => {
+      const items = (x.items || []).map(it => `${it.n}×${it.q}(NT$${it.a})`).join("; ");
+      return [x.date, `"${x.desc.replace(/"/g, '""')}"`, t("cats")[x.cat], x.amount, x.inv || "", x.src, `"${items.replace(/"/g, '""')}"`].join(",");
+    });
+  download("expenses.csv", [head, ...rows].join("\n"), "text/csv;charset=utf-8");
+}
+function exportJSON() {
+  download("expense-backup.json", JSON.stringify({ expenses, budgets }, null, 2), "application/json");
+}
+function restoreJSON(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (Array.isArray(data.expenses)) expenses = data.expenses;
+      if (data.budgets) budgets = data.budgets;
+      save(); localStorage.setItem("et_budgets", JSON.stringify(budgets));
+      toast(t("restoredOk")); applyLang();
+    } catch { toast(t("importFail")); }
+  };
+  reader.readAsText(file);
+}
+function clearAll() {
+  if (!confirm(t("confirmClear"))) return;
+  expenses = []; budgets = {};
+  localStorage.removeItem("et_expenses"); localStorage.removeItem("et_budgets");
+  applyLang();
+}
+
+// ---------- GitHub sync ----------
+function b64enc(s) {
+  const bytes = new TextEncoder().encode(s);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  return btoa(bin);
+}
+function b64dec(s) {
+  return new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, "")), c => c.charCodeAt(0)));
+}
+async function ghSync() {
+  const token = document.getElementById("ghToken").value.trim();
+  const repo = document.getElementById("ghRepo").value.trim();
+  if (!token || !repo) { toast(t("syncMissing")); return; }
+  localStorage.setItem("et_gh_token", token);
+  localStorage.setItem("et_gh_repo", repo);
+  const url = `https://api.github.com/repos/${repo}/contents/data.json`;
+  const hdrs = { Authorization: "Bearer " + token, Accept: "application/vnd.github+json" };
+  document.getElementById("syncStatus").textContent = t("syncing");
+  try {
+    // 1. pull remote
+    let sha = null, remote = null;
+    const r = await fetch(url, { headers: hdrs, cache: "no-store" });
+    if (r.status === 200) {
+      const j = await r.json();
+      sha = j.sha;
+      remote = JSON.parse(b64dec(j.content));
+    } else if (r.status !== 404) throw new Error("HTTP " + r.status);
+    // 2. merge (union by record id; invoices deduped by invoice number+month; deletions respected)
+    if (remote && Array.isArray(remote.expenses)) {
+      deletedIds = [...new Set([...(remote.deleted || []), ...deletedIds])];
+      const byId = new Map();
+      const invs = new Set();
+      const addRec = x => {
+        if (deletedIds.includes(x.id)) return;
+        if (x.inv) { const k = invKey(x); if (invs.has(k)) return; invs.add(k); }
+        byId.set(x.id, x);
+      };
+      remote.expenses.forEach(addRec);
+      expenses.forEach(x => { // local wins on same id
+        if (deletedIds.includes(x.id)) return;
+        if (byId.has(x.id)) { byId.set(x.id, x); return; }
+        addRec(x);
+      });
+      expenses = [...byId.values()];
+      budgets = { ...(remote.budgets || {}), ...budgets };
+      save(); saveDeleted();
+      localStorage.setItem("et_budgets", JSON.stringify(budgets));
+    }
+    // 3. push merged
+    const body = { message: "sync " + new Date().toISOString(), content: b64enc(JSON.stringify({ expenses, budgets, deleted: deletedIds })) };
+    if (sha) body.sha = sha;
+    const p = await fetch(url, { method: "PUT", headers: hdrs, body: JSON.stringify(body) });
+    if (!p.ok) throw new Error("HTTP " + p.status);
+    localStorage.setItem("et_lastsync", new Date().toLocaleString());
+    toast(t("syncOk"));
+    setSyncStatus();
+    renderAll();
+  } catch (e) {
+    setSyncStatus();
+    toast(t("syncErr") + e.message);
+  }
+}
+function setSyncStatus() {
+  const last = localStorage.getItem("et_lastsync");
+  document.getElementById("syncStatus").textContent = last ? t("lastSync") + last : t("syncNever");
+}
+
+// ---------- misc ----------
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+function renderAll() { renderDashboard(); renderRecords(); }
+
+// init
+document.getElementById("fDate").value = new Date().toISOString().slice(0, 10);
+document.getElementById("ghRepo").value = localStorage.getItem("et_gh_repo") || "";
+document.getElementById("ghToken").value = localStorage.getItem("et_gh_token") || "";
+applyLang();
+setSyncStatus();
+</script>
+</body>
+</html>
