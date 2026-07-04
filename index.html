@@ -2,7 +2,11 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="記帳本">
+<meta name="theme-color" content="#2563eb">
 <title>記帳本 Expense Tracker</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
@@ -57,6 +61,25 @@
   .item-row input:nth-child(1) { flex: 2; }
   .item-row input:nth-child(2) { width: 74px; flex: none; }
   .item-row input:nth-child(3) { width: 110px; flex: none; }
+  .nav-ico { display: none; }
+  /* --- mobile (iPhone) layout: bottom tab bar, safe areas, no input zoom --- */
+  @media (max-width: 700px) {
+    header { padding-top: calc(12px + env(safe-area-inset-top)); }
+    nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+      border-top: 1px solid var(--border); border-bottom: none;
+      padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+      justify-content: space-around; box-shadow: 0 -2px 10px rgba(0,0,0,.05); }
+    nav button { flex: 1; display: flex; flex-direction: column; align-items: center;
+      gap: 2px; padding: 6px 2px; font-size: .68rem; }
+    .nav-ico { display: block; font-size: 1.3rem; line-height: 1; }
+    main { padding: 14px 14px calc(96px + env(safe-area-inset-bottom)); }
+    input, select { font-size: 16px; min-height: 42px; } /* 16px stops Safari zoom-on-focus */
+    .btn { min-height: 44px; }
+    .del { padding: 10px; }
+    th, td { padding: 10px 6px; }
+    .month-nav button { padding: 10px 18px; }
+    .chart-wrap { height: 230px; }
+  }
 </style>
 </head>
 <body>
@@ -65,11 +88,11 @@
   <button class="lang-btn" id="langBtn" onclick="toggleLang()"></button>
 </header>
 <nav>
-  <button data-view="dashboard" class="active" data-i18n="navDashboard" onclick="showView('dashboard')"></button>
-  <button data-view="add" data-i18n="navAdd" onclick="showView('add')"></button>
-  <button data-view="records" data-i18n="navRecords" onclick="showView('records')"></button>
-  <button data-view="import" data-i18n="navImport" onclick="showView('import')"></button>
-  <button data-view="settings" data-i18n="navSettings" onclick="showView('settings')"></button>
+  <button data-view="dashboard" class="active" onclick="showView('dashboard')"><span class="nav-ico">📊</span><span data-i18n="navDashboard"></span></button>
+  <button data-view="add" onclick="showView('add')"><span class="nav-ico">➕</span><span data-i18n="navAdd"></span></button>
+  <button data-view="records" onclick="showView('records')"><span class="nav-ico">📋</span><span data-i18n="navRecords"></span></button>
+  <button data-view="import" onclick="showView('import')"><span class="nav-ico">📥</span><span data-i18n="navImport"></span></button>
+  <button data-view="settings" onclick="showView('settings')"><span class="nav-ico">⚙️</span><span data-i18n="navSettings"></span></button>
 </nav>
 <main>
 
@@ -610,15 +633,21 @@ function renderDashboard() {
   // pie — split each expense across item-level categories where present
   const byCat = {};
   monthExp.forEach(x => { for (const [c, a] of catAmounts(x)) byCat[c] = (byCat[c] || 0) + a; });
-  // pie shows every category (zero-value slices are invisible but stay in the legend);
-  // negative totals (紅利折扣) can't be drawn as slices — they appear in the breakdown list below
+  // pie shows every category; negative totals (紅利折扣) are drawn using their absolute value
+  // as slice size, while tooltips show the true signed amount
   if (pieChart) pieChart.destroy();
   pieChart = new Chart(document.getElementById("pieChart"), {
     type: "doughnut",
-    data: { labels: CAT_KEYS.map(k => t("cats")[k]),
-      datasets: [{ data: CAT_KEYS.map(k => Math.max(byCat[k] || 0, 0)), backgroundColor: CAT_KEYS.map(k => CAT_COLORS[k]), borderWidth: 1 }] },
+    data: { labels: CAT_KEYS.map(k => (byCat[k] || 0) < 0 ? t("cats")[k] + " (−)" : t("cats")[k]),
+      datasets: [{ data: CAT_KEYS.map(k => Math.abs(byCat[k] || 0)), backgroundColor: CAT_KEYS.map(k => CAT_COLORS[k]), borderWidth: 1 }] },
     options: { maintainAspectRatio: false,
-      plugins: { legend: { position: "right", labels: { boxWidth: 12, font: { size: 10 } } } },
+      plugins: {
+        legend: { position: "right", labels: { boxWidth: 12, font: { size: 10 } } },
+        tooltip: { callbacks: { label: ctx => {
+          const k = CAT_KEYS[ctx.dataIndex], v = byCat[k] || 0;
+          return `${t("cats")[k]}: NT$${v.toLocaleString()}`;
+        } } }
+      },
       onClick: (evt, els) => { if (els.length) drillToCategory(CAT_KEYS[els[0].index]); },
       onHover: (evt, els) => { evt.native.target.style.cursor = els.length ? "pointer" : "default"; } }
   });
