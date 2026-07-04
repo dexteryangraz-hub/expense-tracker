@@ -154,7 +154,14 @@
     <label data-i18n="fDesc"></label>
     <input type="text" id="fDesc" data-i18n-ph="phDesc">
     <label data-i18n="fAmount"></label>
-    <input type="number" id="fAmount" min="0" step="1" placeholder="NT$">
+    <div style="display:flex;gap:8px">
+      <select id="fCur" style="width:92px;flex:none" onchange="fxPreview()">
+        <option value="TWD">NT$</option>
+        <option value="USD">US$</option>
+      </select>
+      <input type="number" id="fAmount" min="0" step="0.01" placeholder="NT$" oninput="fxPreview()">
+    </div>
+    <p class="muted" id="fxInfo" style="margin-top:5px"></p>
     <label data-i18n="fCategory"></label>
     <select id="fCategory"></select>
     <label data-i18n="itemsOptional"></label>
@@ -263,6 +270,9 @@ const I18N = {
     syncRepo: "私人資料 Repo（帳號/名稱）", syncToken: "Fine-grained Access Token",
     btnSync: "立即同步", syncOk: "同步完成 ✓", syncErr: "同步失敗：", syncMissing: "請先填入 Repo 與 Token",
     syncNever: "尚未同步過", lastSync: "上次同步：", syncing: "同步中…",
+    fxCurrent: r => `目前匯率：1 USD ≈ NT$${r}（自動更新）`,
+    fxApprox: (u, n, r) => `US$${u} ≈ NT$${n.toLocaleString()}（匯率 ${r}）`,
+    fxError: "無法取得匯率，請檢查網路後再試", fxStale: "（離線，使用上次匯率）",
     months: ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
     langLabel: "EN",
     cats: { food: "飲食", drink: "飲品", transport: "交通", shopping: "購物", clothing: "服飾", entertainment: "娛樂", travel: "旅遊", education: "教育/書籍", beauty: "美容/理髮", health: "醫療", bills: "帳單", discount: "紅利折扣", other: "其他" }
@@ -295,6 +305,9 @@ const I18N = {
     syncRepo: "Private data repo (username/name)", syncToken: "Fine-grained access token",
     btnSync: "Sync now", syncOk: "Synced ✓", syncErr: "Sync failed: ", syncMissing: "Enter repo and token first",
     syncNever: "Never synced", lastSync: "Last sync: ", syncing: "Syncing…",
+    fxCurrent: r => `Current rate: 1 USD ≈ NT$${r} (auto-updated)`,
+    fxApprox: (u, n, r) => `US$${u} ≈ NT$${n.toLocaleString()} (rate ${r})`,
+    fxError: "Couldn't fetch exchange rate — check your connection", fxStale: " (offline, using last saved rate)",
     months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
     langLabel: "中文",
     cats: { food: "Food", drink: "Drinks", transport: "Transport", shopping: "Shopping", clothing: "Clothing", entertainment: "Entertainment", travel: "Travel", education: "Education", beauty: "Personal care", health: "Health", bills: "Bills", discount: "Rewards/Discount", other: "Other" }
@@ -373,6 +386,43 @@ function showView(v) {
   if (v === "records") renderRecords();
 }
 
+// ---------- exchange rate (USD -> TWD), cached 12h, offline fallback ----------
+let fx = JSON.parse(localStorage.getItem("et_fx") || "null"); // {rate, ts}
+let fxFresh = false;
+async function loadFx(force) {
+  if (!force && fx && Date.now() - fx.ts < 12 * 3600 * 1000) { fxFresh = true; fxPreview(); return; }
+  const sources = [
+    ["https://open.er-api.com/v6/latest/USD", j => j?.rates?.TWD],
+    ["https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json", j => j?.usd?.twd],
+  ];
+  for (const [url, pick] of sources) {
+    try {
+      const r = await fetch(url, { cache: "no-store" });
+      const rate = pick(await r.json());
+      if (rate > 0) {
+        fx = { rate, ts: Date.now() };
+        fxFresh = true;
+        localStorage.setItem("et_fx", JSON.stringify(fx));
+        break;
+      }
+    } catch (e) { /* try next source */ }
+  }
+  fxPreview();
+}
+function fxPreview() {
+  const el = document.getElementById("fxInfo");
+  const cur = document.getElementById("fCur").value;
+  if (!fx) { el.textContent = cur === "USD" ? t("fxError") : ""; return; }
+  const rate = fx.rate.toFixed(2);
+  const stale = fxFresh ? "" : t("fxStale");
+  if (cur === "USD") {
+    const usd = parseFloat(document.getElementById("fAmount").value);
+    el.textContent = (usd > 0 ? t("fxApprox", usd, Math.round(usd * fx.rate), rate) : t("fxCurrent", rate)) + stale;
+  } else {
+    el.textContent = t("fxCurrent", rate) + stale;
+  }
+}
+
 // ---------- add manual ----------
 function addItemRow() {
   const row = document.createElement("div");
@@ -399,22 +449,30 @@ function syncItemTotal() {
 function addManual() {
   const date = document.getElementById("fDate").value;
   const desc = document.getElementById("fDesc").value.trim();
-  const amount = parseFloat(document.getElementById("fAmount").value);
+  let amount = parseFloat(document.getElementById("fAmount").value);
   const cat = document.getElementById("fCategory").value;
+  const cur = document.getElementById("fCur").value;
   if (!date || !desc || !(amount > 0)) return;
+  if (cur === "USD" && !fx) { toast(t("fxError")); return; }
   const rec = { id: uid(), date, desc, amount, cat, src: "manual" };
-  const items = collectItems().map(it => {
+  let items = collectItems().map(it => {
     const out = { ...it, n: it.n || "—" };
     const ic = guessItemCategory(out.n, out.a);
     if (ic) out.c = ic;
     return out;
   });
+  if (cur === "USD") {
+    rec.fx = { c: "USD", a: amount, r: +fx.rate.toFixed(4) };
+    rec.amount = Math.round(amount * fx.rate);
+    items = items.map(it => ({ ...it, a: Math.round(it.a * fx.rate), p: Math.round((it.p || 0) * fx.rate) }));
+  }
   if (items.length) rec.items = items;
   expenses.push(rec);
   save();
   document.getElementById("fDesc").value = "";
   document.getElementById("fAmount").value = "";
   document.getElementById("itemRows").innerHTML = "";
+  fxPreview();
   toast(t("savedOk"));
   renderAll();
 }
@@ -556,7 +614,7 @@ function renderRecords() {
       <td onclick="event.stopPropagation()"><select onchange="setCat('${x.id}', this.value)" style="width:auto;padding:3px 6px;font-size:.82rem">
         ${CAT_KEYS.map(k => `<option value="${k}" ${k === x.cat ? "selected" : ""}>${t("cats")[k]}</option>`).join("")}
       </select></td>
-      <td class="num">NT$${x.amount.toLocaleString()}</td>
+      <td class="num">NT$${x.amount.toLocaleString()}${x.fx ? `<div class="muted" style="font-size:.72rem">US$${x.fx.a.toLocaleString()}</div>` : ""}</td>
       <td onclick="event.stopPropagation()"><button class="del" onclick="delExpense('${x.id}')">✕</button></td>
     </tr>`;
     if (!hasItems) return main;
@@ -854,6 +912,7 @@ document.getElementById("ghRepo").value = localStorage.getItem("et_gh_repo") || 
 document.getElementById("ghToken").value = localStorage.getItem("et_gh_token") || "";
 applyLang();
 setSyncStatus();
+loadFx();
 </script>
 </body>
 </html>
