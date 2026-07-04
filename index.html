@@ -100,6 +100,21 @@
     th, td { padding: 10px 6px; }
     .month-nav button { padding: 10px 18px; }
     .chart-wrap { height: 230px; }
+    /* records: card layout instead of table — nothing scrolls sideways */
+    #view-records table, #view-records tbody { display: block; width: 100%; }
+    #view-records thead { display: none; }
+    #view-records tr.rec-main { display: grid; grid-template-columns: 1fr auto;
+      grid-template-areas: "date date" "desc amt" "cat act";
+      column-gap: 12px; row-gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    #view-records tr.rec-main td { display: block; padding: 0; border: none; }
+    #view-records .c-date { grid-area: date; font-size: .74rem; color: var(--muted); }
+    #view-records .c-desc { grid-area: desc; overflow-wrap: anywhere; }
+    #view-records .c-amt { grid-area: amt; text-align: right; white-space: nowrap; }
+    #view-records .c-cat { grid-area: cat; align-self: end; }
+    #view-records .c-act { grid-area: act; justify-self: end; align-self: end; }
+    #view-records tr.rec-detail { display: block; padding: 4px 0 10px; border-bottom: 1px solid var(--border); }
+    #view-records tr.rec-detail td.d-pad { display: none; }
+    #view-records tr.rec-detail td.d-body { display: block; width: 100%; border: none; }
     /* item detail rows: name on its own line, category + amount below right */
     .item-line { flex-wrap: wrap; row-gap: 2px; padding: 6px 0; border-bottom: 1px dashed var(--border); }
     .item-line:last-child { border-bottom: none; }
@@ -323,7 +338,7 @@ const I18N = {
     dupDone: n => `已取代 ${n} 筆手動紀錄`,
     months: ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
     langLabel: "EN",
-    cats: { food: "飲食", drink: "飲品", transport: "交通", shopping: "購物", clothing: "服飾", entertainment: "娛樂", travel: "旅遊", education: "教育/書籍", beauty: "美容/理髮", health: "醫療", bills: "帳單", discount: "紅利折扣", other: "其他" }
+    cats: { food: "飲食", drink: "飲品", transport: "交通", shopping: "購物", clothing: "服飾", entertainment: "娛樂", travel: "旅遊", education: "教育/書籍", beauty: "美容/理髮", health: "醫療", bills: "帳單", investment: "投資", discount: "紅利折扣", other: "其他" }
   },
   en: {
     appTitle: "My Expense Tracker", navDashboard: "Dashboard", navAdd: "Add Expense", navRecords: "Records",
@@ -368,11 +383,11 @@ const I18N = {
     dupDone: n => `Replaced ${n} manual record(s)`,
     months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
     langLabel: "中文",
-    cats: { food: "Food", drink: "Drinks", transport: "Transport", shopping: "Shopping", clothing: "Clothing", entertainment: "Entertainment", travel: "Travel", education: "Education", beauty: "Personal care", health: "Health", bills: "Bills", discount: "Rewards/Discount", other: "Other" }
+    cats: { food: "Food", drink: "Drinks", transport: "Transport", shopping: "Shopping", clothing: "Clothing", entertainment: "Entertainment", travel: "Travel", education: "Education", beauty: "Personal care", health: "Health", bills: "Bills", investment: "Investment", discount: "Rewards/Discount", other: "Other" }
   }
 };
-const CAT_KEYS = ["food","drink","transport","shopping","clothing","entertainment","travel","education","beauty","health","bills","discount","other"];
-const CAT_COLORS = { food:"#f59e0b", drink:"#06b6d4", transport:"#3b82f6", shopping:"#ec4899", clothing:"#d946ef", entertainment:"#8b5cf6", travel:"#14b8a6", education:"#6366f1", beauty:"#f472b6", health:"#10b981", bills:"#64748b", discount:"#84cc16", other:"#9ca3af" };
+const CAT_KEYS = ["food","drink","transport","shopping","clothing","entertainment","travel","education","beauty","health","bills","investment","discount","other"];
+const CAT_COLORS = { food:"#f59e0b", drink:"#06b6d4", transport:"#3b82f6", shopping:"#ec4899", clothing:"#d946ef", entertainment:"#8b5cf6", travel:"#14b8a6", education:"#6366f1", beauty:"#f472b6", health:"#10b981", bills:"#64748b", investment:"#eab308", discount:"#84cc16", other:"#9ca3af" };
 
 let lang = localStorage.getItem("et_lang") || "zh";
 const t = (k, ...a) => { const v = I18N[lang][k]; return typeof v === "function" ? v(...a) : v; };
@@ -399,6 +414,7 @@ const CAT_RULES = [
   [/(美容|美髮|理髮|剪髮|燙髮|護膚|SPA|沙龍|美甲)/i, "beauty"],
   [/(UNIQLO|GU|NET|ZARA|H&M|lativ|服飾|服裝|製衣|鞋)/i, "clothing"],
   [/(電信|中華電信|台灣大哥大|遠傳|台灣之星|水費|電費|瓦斯|台電|自來水)/i, "bills"],
+  [/(證券|投資|基金|ETF|複委託|期貨|投信)/i, "investment"],
   [/(7-?ELEVEN|統一超商|全家|FamilyMart|萊爾富|OK超商|全聯|家樂福|Carrefour|大潤發|美廉社|麥當勞|肯德基|KFC|摩斯|咖啡|餐|飯|麵|食|燒|烤|鍋|茶|飲|早午|便當|小吃|吃|商行|坊)/i, "food"],
   [/(momo|蝦皮|Shopee|PChome|IKEA|宜得利|特力屋|燦坤|全國電子|3C)/i, "shopping"],
 ];
@@ -807,14 +823,14 @@ function renderRecords() {
   document.getElementById("recordsBody").innerHTML = rows.map(x => {
     const hasItems = x.items && x.items.length;
     const main = `
-    <tr${hasItems ? ` class="expandable" onclick="toggleItems('${x.id}')" style="cursor:pointer"` : ""}>
-      <td>${x.date}</td>
-      <td>${hasItems ? `<span class="arrow" id="arrow-${x.id}">▸</span> ` : ""}${escapeHtml(x.desc)}${x.inv ? ` <span class="muted" title="${t("invoicePrefix")}">${x.inv}</span>` : ""}</td>
-      <td onclick="event.stopPropagation()"><select onchange="setCat('${x.id}', this.value)" style="width:auto;padding:3px 6px;font-size:.82rem">
+    <tr class="rec-main${hasItems ? " expandable" : ""}"${hasItems ? ` onclick="toggleItems('${x.id}')" style="cursor:pointer"` : ""}>
+      <td class="c-date">${x.date}</td>
+      <td class="c-desc">${hasItems ? `<span class="arrow" id="arrow-${x.id}">▸</span> ` : ""}${escapeHtml(x.desc)}${x.inv ? ` <span class="muted" title="${t("invoicePrefix")}">${x.inv}</span>` : ""}</td>
+      <td class="c-cat" onclick="event.stopPropagation()"><select onchange="setCat('${x.id}', this.value)" style="width:auto;padding:3px 6px;font-size:.82rem">
         ${CAT_KEYS.map(k => `<option value="${k}" ${k === x.cat ? "selected" : ""}>${t("cats")[k]}</option>`).join("")}
       </select></td>
-      <td class="num">NT$${x.amount.toLocaleString()}${x.fx ? `<div class="muted" style="font-size:.72rem">US$${x.fx.a.toLocaleString()}</div>` : ""}</td>
-      <td onclick="event.stopPropagation()" style="white-space:nowrap"><button class="del" style="color:var(--accent)" onclick="editExpense('${x.id}')">✎</button><button class="del" onclick="delExpense('${x.id}')">✕</button></td>
+      <td class="num c-amt">NT$${x.amount.toLocaleString()}${x.fx ? `<div class="muted" style="font-size:.72rem">US$${x.fx.a.toLocaleString()}</div>` : ""}</td>
+      <td class="c-act" onclick="event.stopPropagation()" style="white-space:nowrap"><button class="del" style="color:var(--accent)" onclick="editExpense('${x.id}')">✎</button><button class="del" onclick="delExpense('${x.id}')">✕</button></td>
     </tr>`;
     if (!hasItems) return main;
     const itemRows = x.items.map((it, i) => {
@@ -832,9 +848,9 @@ function renderRecords() {
       </div>`;
     }).join("");
     return main + `
-    <tr id="items-${x.id}" style="display:none">
-      <td></td>
-      <td colspan="4" style="background:var(--bg);border-radius:8px;padding:10px 14px">
+    <tr class="rec-detail" id="items-${x.id}" style="display:none">
+      <td class="d-pad"></td>
+      <td class="d-body" colspan="4" style="background:var(--bg);border-radius:8px;padding:10px 14px">
         <div class="muted" style="font-weight:600;margin-bottom:4px">${t("itemsLabel")}</div>${itemRows}
       </td>
     </tr>`;
