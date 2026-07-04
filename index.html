@@ -160,7 +160,7 @@
 <!-- ADD -->
 <section id="view-add" style="display:none">
   <div class="card">
-    <h2 data-i18n="addExpense"></h2>
+    <h2 id="addTitle"></h2>
     <label data-i18n="fDate"></label>
     <input type="date" id="fDate">
     <label data-i18n="fDesc"></label>
@@ -180,7 +180,8 @@
     <div id="itemRows"></div>
     <button type="button" class="btn secondary" data-i18n="addItem" onclick="addItemRow()" style="margin-top:6px;padding:6px 12px;font-size:.85rem"></button>
     <br>
-    <button class="btn" data-i18n="btnSave" onclick="addManual()"></button>
+    <button class="btn" id="saveBtn" onclick="addManual()"></button>
+    <button class="btn secondary" id="cancelEditBtn" style="display:none;margin-left:8px" onclick="cancelEdit()"></button>
   </div>
 </section>
 
@@ -299,6 +300,7 @@ const I18N = {
     themeTitle: "主題外觀", themeColor: "主題色", darkMode: "深色模式",
     dmLight: "淺色", dmDark: "深色", dmAuto: "自動（跟隨系統）",
     themeNames: { indigo: "靛藍", forest: "森林綠", sunset: "暖陽橘", violet: "紫羅蘭" },
+    editMode: "編輯支出", btnUpdate: "更新", btnCancelEdit: "取消編輯", updatedOk: "已更新 ✓",
     months: ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"],
     langLabel: "EN",
     cats: { food: "飲食", drink: "飲品", transport: "交通", shopping: "購物", clothing: "服飾", entertainment: "娛樂", travel: "旅遊", education: "教育/書籍", beauty: "美容/理髮", health: "醫療", bills: "帳單", discount: "紅利折扣", other: "其他" }
@@ -337,6 +339,7 @@ const I18N = {
     themeTitle: "Appearance", themeColor: "Theme color", darkMode: "Dark mode",
     dmLight: "Light", dmDark: "Dark", dmAuto: "Auto (follow system)",
     themeNames: { indigo: "Indigo", forest: "Forest", sunset: "Sunset", violet: "Violet" },
+    editMode: "Edit expense", btnUpdate: "Update", btnCancelEdit: "Cancel", updatedOk: "Updated ✓",
     months: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
     langLabel: "中文",
     cats: { food: "Food", drink: "Drinks", transport: "Transport", shopping: "Shopping", clothing: "Clothing", entertainment: "Entertainment", travel: "Travel", education: "Education", beauty: "Personal care", health: "Health", bills: "Bills", discount: "Rewards/Discount", other: "Other" }
@@ -427,6 +430,7 @@ function applyLang() {
   document.getElementById("langBtn").textContent = t("langLabel");
   fillCategorySelects();
   renderThemeUI();
+  updateAddMode();
   renderAll();
 }
 function toggleLang() {
@@ -513,35 +517,86 @@ function syncItemTotal() {
   if (items.length && items.some(it => it.a > 0))
     document.getElementById("fAmount").value = items.reduce((s, it) => s + it.a, 0);
 }
+let editingId = null;
 function addManual() {
   const date = document.getElementById("fDate").value;
   const desc = document.getElementById("fDesc").value.trim();
-  let amount = parseFloat(document.getElementById("fAmount").value);
+  const amount = parseFloat(document.getElementById("fAmount").value);
   const cat = document.getElementById("fCategory").value;
   const cur = document.getElementById("fCur").value;
   if (!date || !desc || !(amount > 0)) return;
-  if (cur === "USD" && !fx) { toast(t("fxError")); return; }
-  const rec = { id: uid(), date, desc, amount, cat, src: "manual" };
-  let items = collectItems().map(it => {
-    const out = { ...it, n: it.n || "—" };
-    const ic = guessItemCategory(out.n, out.a);
-    if (ic) out.c = ic;
-    return out;
-  });
+  const editing = editingId ? expenses.find(e => e.id === editingId) : null;
+  // when editing a USD record, reuse its locked-in rate; new USD records use the live rate
+  let rate = null;
   if (cur === "USD") {
-    rec.fx = { c: "USD", a: amount, r: +fx.rate.toFixed(4) };
-    rec.amount = Math.round(amount * fx.rate);
-    items = items.map(it => ({ ...it, fxa: it.a, a: Math.round(it.a * fx.rate), p: Math.round((it.p || 0) * fx.rate) }));
+    rate = (editing && editing.fx && editing.fx.r) || (fx && fx.rate);
+    if (!rate) { toast(t("fxError")); return; }
   }
-  if (items.length) rec.items = items;
-  expenses.push(rec);
+  const oldItems = editing ? editing.items || [] : [];
+  const items = collectItems().map((raw, i) => {
+    const it = { n: raw.n || "—", q: raw.q, p: raw.p, a: raw.a };
+    if (cur === "USD") { it.fxa = it.a; it.a = Math.round(it.a * rate); it.p = Math.round((it.p || 0) * rate); }
+    const ic = (oldItems[i] && oldItems[i].c) || guessItemCategory(it.n, it.a);
+    if (ic) it.c = ic;
+    return it;
+  });
+  const rec = editing || { id: uid(), src: "manual" };
+  rec.date = date; rec.desc = desc; rec.cat = cat;
+  if (cur === "USD") {
+    rec.fx = { c: "USD", a: amount, r: +(+rate).toFixed(4) };
+    rec.amount = Math.round(amount * rate);
+  } else {
+    delete rec.fx;
+    rec.amount = amount;
+  }
+  if (items.length) rec.items = items; else delete rec.items;
+  if (!editing) expenses.push(rec);
   save();
+  toast(t(editing ? "updatedOk" : "savedOk"));
+  const wasEditing = !!editing;
+  cancelEdit();
+  renderAll();
+  if (wasEditing) showView("records");
+}
+function editExpense(id) {
+  const x = expenses.find(e => e.id === id);
+  if (!x) return;
+  editingId = id;
+  document.getElementById("fDate").value = x.date;
+  document.getElementById("fDesc").value = x.desc;
+  document.getElementById("fCategory").value = x.cat;
+  document.getElementById("fCur").value = x.fx ? "USD" : "TWD";
+  document.getElementById("fAmount").value = x.fx ? x.fx.a : x.amount;
+  const rowsEl = document.getElementById("itemRows");
+  rowsEl.innerHTML = "";
+  (x.items || []).forEach(it => {
+    addItemRow();
+    const ins = rowsEl.lastElementChild.querySelectorAll("input");
+    ins[0].value = it.n === "—" ? "" : it.n;
+    ins[1].value = it.q || 1;
+    ins[2].value = x.fx ? (it.fxa != null ? it.fxa : +(it.a / x.fx.r).toFixed(2)) : it.a;
+  });
+  updateAddMode();
+  fxPreview();
+  showView("add");
+}
+function cancelEdit() {
+  editingId = null;
+  document.getElementById("fDate").value = new Date().toISOString().slice(0, 10);
   document.getElementById("fDesc").value = "";
   document.getElementById("fAmount").value = "";
+  document.getElementById("fCur").value = "TWD";
   document.getElementById("itemRows").innerHTML = "";
+  updateAddMode();
   fxPreview();
-  toast(t("savedOk"));
-  renderAll();
+}
+function updateAddMode() {
+  const editing = !!editingId;
+  document.getElementById("addTitle").textContent = t(editing ? "editMode" : "addExpense");
+  document.getElementById("saveBtn").textContent = t(editing ? "btnUpdate" : "btnSave");
+  const cb = document.getElementById("cancelEditBtn");
+  cb.style.display = editing ? "" : "none";
+  cb.textContent = t("btnCancelEdit");
 }
 
 // ---------- CSV import (MOF e-invoice platform format: pipe-delimited, M/D rows) ----------
@@ -682,7 +737,7 @@ function renderRecords() {
         ${CAT_KEYS.map(k => `<option value="${k}" ${k === x.cat ? "selected" : ""}>${t("cats")[k]}</option>`).join("")}
       </select></td>
       <td class="num">NT$${x.amount.toLocaleString()}${x.fx ? `<div class="muted" style="font-size:.72rem">US$${x.fx.a.toLocaleString()}</div>` : ""}</td>
-      <td onclick="event.stopPropagation()"><button class="del" onclick="delExpense('${x.id}')">✕</button></td>
+      <td onclick="event.stopPropagation()" style="white-space:nowrap"><button class="del" style="color:var(--accent)" onclick="editExpense('${x.id}')">✎</button><button class="del" onclick="delExpense('${x.id}')">✕</button></td>
     </tr>`;
     if (!hasItems) return main;
     const itemRows = x.items.map((it, i) => {
